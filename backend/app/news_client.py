@@ -1,10 +1,23 @@
 import requests
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 from app.schemas import Article, NewsResponse
 
-# Load environment variables from .env file
-load_dotenv()
+# --- ROBUST ENV LOADING ---
+# 1. Calculate the exact path to backend/.env based on THIS file's location
+#    Structure: backend/app/news_client.py
+#    We want:   backend/.env
+current_file_path = Path(__file__).resolve()
+env_path = current_file_path.parent.parent / '.env'
+
+# 2. Try to load it
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    # Fallback: Just try loading from the current directory
+    load_dotenv()
+# ----------------
 
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 BASE_URL = "https://newsapi.org/v2/everything"
@@ -14,8 +27,19 @@ def get_news(query: str, language: str = "en", page_size: int = 5) -> list[Artic
     Fetches news articles from NewsAPI based on a query.
     Returns a list of Article objects (defined in schemas.py).
     """
+    # --- DEBUGGING BLOCK ---
     if not NEWS_API_KEY:
-        raise ValueError("NEWS_API_KEY is not set in the environment variables.")
+        print("\n" + "!"*60)
+        print("❌ CRITICAL ERROR: NEWS_API_KEY is missing.")
+        print("-" * 60)
+        print(f"1. I looked for the .env file here:\n   {env_path}")
+        print(f"2. Does this file exist? -> {env_path.exists()}")
+        print(f"3. Current Working Directory: {os.getcwd()}")
+        print("-" * 60)
+        print("FIX: Check that 'backend/.env' exists and has no extra extension (like .txt)")
+        print("!"*60 + "\n")
+        raise ValueError("API Key not found. See debug info above.")
+    # -----------------------
 
     params = {
         "q": query,
@@ -27,7 +51,7 @@ def get_news(query: str, language: str = "en", page_size: int = 5) -> list[Artic
 
     try:
         response = requests.get(BASE_URL, params=params)
-        response.raise_for_status() # Raise an error for 4xx or 5xx status codes
+        response.raise_for_status() 
         
         data = response.json()
         
@@ -35,10 +59,8 @@ def get_news(query: str, language: str = "en", page_size: int = 5) -> list[Artic
             print(f"API Error: {data.get('message')}")
             return []
 
-        # Convert raw JSON into our nice Pydantic models
         articles = []
         for item in data.get("articles", []):
-            # Handle cases where source might be None
             source_data = item.get("source") or {}
             
             article = Article(
