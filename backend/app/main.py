@@ -1,16 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from app.news_client import get_news
 from app.models import extract_content, summarize_article
-from app.schemas import NewsResponse
+from app.schemas import NewsResponse, SummarizeRequest
 
 app = FastAPI(title="AI News Summarizer")
 
-# Enable CORS (Cross-Origin Resource Sharing)
-# This allows your React Frontend (running on a different port) to talk to this Backend.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with ["http://localhost:3000"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -18,35 +16,30 @@ app.add_middleware(
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to the AI News Summarizer API. Go to /docs to test it!"}
+    return {"message": "Welcome to the AI News Summarizer API."}
 
 @app.get("/news/search", response_model=NewsResponse)
 def search_news(q: str, language: str = "en"):
     """
-    Search for news, scrape the content, and summarize the top articles.
+    Step 1: Get Headlines ONLY (Fast).
+    We do NOT summarize here anymore.
     """
-    print(f"🔎 Received search query: {q}")
-    
-    # 1. Fetch relevant articles from NewsAPI
-    articles = get_news(query=q, language=language, page_size=5)
-    
-    if not articles:
-        return NewsResponse(total_results=0, articles=[])
-
-    # 2. Summarize only the top 2 articles to keep response time reasonable
-    # (Scraping and summarizing takes time!)
-    for i in range(min(2, len(articles))):
-        article = articles[i]
-        print(f"   📝 Summarizing article: {article.title[:30]}...")
-        
-        # Scrape full text
-        full_text = extract_content(article.url)
-        
-        if full_text:
-            # Generate AI Summary
-            article.summary = summarize_article(full_text)
-            article.full_text = full_text[:200] + "..." # Store just a snippet for debugging
-        else:
-            article.summary = "Could not scrape content (likely blocked or paywalled)."
-
+    print(f"🔎 Fetching headlines for: {q}")
+    articles = get_news(query=q, language=language, page_size=10) # Increased to 10 since it's fast now
     return NewsResponse(total_results=len(articles), articles=articles)
+
+@app.post("/news/summarize")
+def summarize_news_article(request: SummarizeRequest):
+    """
+    Step 2: Summarize a single article (Slow/AI).
+    The frontend calls this individually for each card.
+    """
+    print(f"   🤖 Summarizing: {request.url}")
+    
+    full_text = extract_content(request.url)
+    
+    if full_text:
+        summary = summarize_article(full_text)
+        return {"summary": summary, "full_text": full_text[:200] + "..."}
+    else:
+        return {"summary": "Could not extract content (Protected or Dead Link).", "full_text": None}
