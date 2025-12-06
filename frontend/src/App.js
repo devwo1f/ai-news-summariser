@@ -13,6 +13,15 @@ const formatDate = (dateString) => {
 };
 
 const NewsCard = ({ article, innerRef }) => {
+  
+  // Helper to determine sentiment color
+  const getSentimentColor = (sentiment) => {
+    if (!sentiment) return 'bg-gray-200';
+    if (sentiment.label === 'POSITIVE') return 'bg-green-500';
+    if (sentiment.label === 'NEGATIVE') return 'bg-red-500';
+    return 'bg-gray-400';
+  };
+
   return (
     <div 
       ref={innerRef}
@@ -26,21 +35,36 @@ const NewsCard = ({ article, innerRef }) => {
             className="w-full h-48 object-cover"
             onError={(e) => e.target.style.display = 'none'} 
           />
-          {/* Date Overlay on Image (Optional style, or keep in body) */}
           <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
              {formatDate(article.published_at)}
           </div>
         </div>
       )}
       <div className="p-6 flex-1 flex flex-col">
-        {/* Tags Row */}
-        <div className="flex items-center space-x-2 mb-3">
-          <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide">
+        {/* Source & AI Tags Row */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          {/* 1. Source Name */}
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
              {article.source_name}
           </span>
-          <span className="text-xs text-gray-400">
-             {new URL(article.url).hostname.replace('www.', '')}
-          </span>
+          
+          <span className="text-gray-300">|</span>
+
+          {/* 2. AI Category Tag (Only shows if loaded) */}
+          {article.category ? (
+             <span className="bg-indigo-100 text-indigo-800 text-xs font-bold px-2.5 py-0.5 rounded-full border border-indigo-200">
+               {article.category}
+             </span>
+          ) : (
+             <span className="text-xs text-gray-400 italic">...</span>
+          )}
+
+          {/* 3. Sentiment Dot */}
+          {article.sentiment && (
+            <div className="flex items-center space-x-1" title={`Sentiment: ${article.sentiment.label}`}>
+              <span className={`h-2.5 w-2.5 rounded-full ${getSentimentColor(article.sentiment)}`}></span>
+            </div>
+          )}
         </div>
         
         <h3 className="text-xl font-bold text-gray-800 mb-3 leading-tight">
@@ -58,7 +82,7 @@ const NewsCard = ({ article, innerRef }) => {
         ) : article.is_loading ? (
           <div className="bg-gray-50 p-4 rounded-lg mb-4 flex items-center space-x-3 border-l-4 border-gray-300">
             <div className="animate-spin h-4 w-4 border-2 border-blue-600 rounded-full border-t-transparent"></div>
-            <p className="text-xs text-gray-500 font-medium">AI is reading article...</p>
+            <p className="text-xs text-gray-500 font-medium">AI is analyzing...</p>
           </div>
         ) : (
            <div className="bg-gray-50 p-4 rounded-lg mb-4">
@@ -132,7 +156,14 @@ function App() {
       const data = await response.json();
       
       if (data.articles && data.articles.length > 0) {
-        const initializedArticles = data.articles.map(art => ({ ...art, is_loading: true, summary: null }));
+        // Initialize with null sentiment/category
+        const initializedArticles = data.articles.map(art => ({ 
+            ...art, 
+            is_loading: true, 
+            summary: null,
+            sentiment: null,
+            category: null
+        }));
         
         if (isNewSearch) {
             setArticles(initializedArticles);
@@ -200,20 +231,23 @@ function App() {
       const data = await response.json();
 
       setArticles(prevArticles => {
-        // If the backend returns no full_text (meaning extraction failed),
-        // we REMOVE this article from the list entirely.
         if (!data.full_text) {
              return prevArticles.filter(art => art.url !== url);
         }
 
         return prevArticles.map(art => 
           art.url === url 
-            ? { ...art, summary: data.summary, is_loading: false } 
+            ? { 
+                ...art, 
+                summary: data.summary, 
+                sentiment: data.sentiment, // New Field
+                category: data.category,   // New Field
+                is_loading: false 
+              } 
             : art
         )
       });
     } catch (err) {
-      // If error, we keep the article but show error state (or you could remove it here too)
       setArticles(prevArticles => 
         prevArticles.map(art => 
           art.url === url 
@@ -250,10 +284,10 @@ function App() {
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-4xl mx-auto px-4 py-16 sm:px-6 lg:px-8 text-center">
           <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl mb-4">
-            Brief News. <span className="text-blue-600">Infinite Feed.</span>
+            Brief News. <span className="text-blue-600">Deep Insights.</span>
           </h1>
           <p className="text-xl text-gray-500 mb-8">
-            Scroll down to see the world's top stories, summarized in real-time.
+            Scroll down for summarized news, sentiment analysis, and topic detection.
           </p>
 
           <form onSubmit={handleSearch} className="relative max-w-2xl mx-auto">
