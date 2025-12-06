@@ -2,12 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // --- Components ---
 
-const NewsCard = ({ article, innerRef }) => {
+const NewsCard = ({ article }) => {
   return (
-    <div 
-      ref={innerRef}
-      className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100 flex flex-col h-full animate-fade-in-up"
-    >
+    <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100 flex flex-col h-full animate-fade-in-up">
       {article.image_url && (
         <img 
           src={article.image_url} 
@@ -80,45 +77,26 @@ function App() {
   const [hasMore, setHasMore] = useState(true);
   
   const processedUrls = useRef(new Set());
-  const observer = useRef();
+  // Ref for the invisible element at the bottom of the list
+  const observerTarget = useRef(null);
 
   const categories = ["Technology", "Sports", "Business", "Health", "Science", "Entertainment"];
 
-  // 0. Initial Load (Front Page Feed)
+  // 0. Initial Load
   useEffect(() => {
-    // Load top headlines on startup
     fetchArticles("", 1, true);
     // eslint-disable-next-line
   }, []);
 
-  // 1. Infinite Scroll Observer
-  const lastArticleRef = useCallback(node => {
-    if (loading || loadingMore) return;
-    
-    if (observer.current) observer.current.disconnect();
-    
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        // Increment page and fetch more
-        setPage(prevPage => {
-            const nextPage = prevPage + 1;
-            fetchArticles(query, nextPage, false);
-            return nextPage;
-        });
-      }
-    });
-    
-    if (node) observer.current.observe(node);
-  }, [loading, loadingMore, hasMore, query]);
-
-  // 2. Fetch Articles
+  // 1. Fetch Articles Logic
   const fetchArticles = async (searchQuery, pageNum, isNewSearch = true) => {
+    // If it's a new search, reset everything
     if (isNewSearch) {
         setLoading(true);
         setArticles([]); 
         processedUrls.current.clear();
         setHasMore(true);
-        setPage(1); // Ensure page state matches
+        setPage(1); 
     } else {
         setLoadingMore(true);
     }
@@ -126,8 +104,8 @@ function App() {
     setError(null);
 
     try {
-      // Allow empty query for "Top Headlines"
-      const url = `http://127.0.0.1:8000/news/search?q=${searchQuery}&page=${pageNum}`;
+      const safeQuery = encodeURIComponent(searchQuery);
+      const url = `http://127.0.0.1:8000/news/search?q=${safeQuery}&page=${pageNum}`;
       
       const response = await fetch(url);
       const data = await response.json();
@@ -138,7 +116,7 @@ function App() {
         if (isNewSearch) {
             setArticles(initializedArticles);
         } else {
-            // Filter duplicates before adding
+            // Append new articles (filtering out any duplicates that NewsAPI might send)
             setArticles(prev => {
                 const newArts = initializedArticles.filter(
                     newArt => !prev.some(prevArt => prevArt.url === newArt.url)
@@ -147,18 +125,45 @@ function App() {
             });
         }
         
+        // Start summarizing the new batch
         summarizeAll(initializedArticles);
       } else {
-        setHasMore(false); // Stop trying to load more
+        if (!isNewSearch) setHasMore(false); // No more pages to load
       }
     } catch (err) {
       console.error("Failed to fetch news:", err);
-      setError("Failed to connect to the backend.");
+      setError("Failed to connect to backend. Ensure Python server is running.");
     } finally {
       setLoading(false);
       setLoadingMore(false);
     }
   };
+
+  // 2. Infinite Scroll Observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        // If we see the bottom element AND we aren't already loading AND there is more to load...
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setPage(prevPage => {
+            const nextPage = prevPage + 1;
+            fetchArticles(query, nextPage, false);
+            return nextPage;
+          });
+        }
+      },
+      { threshold: 1.0 } // Trigger when 100% of the target is visible
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) observer.disconnect();
+    };
+  }, [hasMore, loading, loadingMore, query]);
+
 
   const summarizeAll = async (articlesList) => {
     for (const article of articlesList) {
@@ -185,6 +190,7 @@ function App() {
         )
       );
     } catch (err) {
+      // If error, stop the loading spinner for this card
       setArticles(prevArticles => 
         prevArticles.map(art => 
           art.url === url 
@@ -269,30 +275,26 @@ function App() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {articles.map((article, index) => {
-                // Attach Ref to the LAST element only
-                if (articles.length === index + 1) {
-                    return <NewsCard innerRef={lastArticleRef} key={`${article.url}-${index}`} article={article} />
-                } else {
-                    return <NewsCard key={`${article.url}-${index}`} article={article} />
-                }
-            })}
+            {articles.map((article, index) => (
+               <NewsCard key={`${article.url}-${index}`} article={article} />
+            ))}
         </div>
 
-        {/* Loading States */}
-        {loading && (
-           <div className="text-center py-12">
-               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-               <p className="text-gray-500">Fetching headlines...</p>
-           </div>
-        )}
-        
-        {loadingMore && (
-           <div className="text-center py-8 pb-12">
+        {/* --- Infinite Scroll Sensor --- */}
+        {/* We place this div at the bottom. When it comes into view, we load more. */}
+        <div ref={observerTarget} className="h-10 w-full mt-8 flex items-center justify-center">
+            {loadingMore && (
                <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full text-gray-500 text-sm">
                     <div className="animate-spin h-3 w-3 border-2 border-gray-500 rounded-full border-t-transparent mr-2"></div>
                     Loading more news...
                </div>
+            )}
+        </div>
+
+        {loading && (
+           <div className="text-center py-12">
+               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+               <p className="text-gray-500">Fetching headlines...</p>
            </div>
         )}
 

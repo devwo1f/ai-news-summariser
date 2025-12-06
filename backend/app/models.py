@@ -1,11 +1,21 @@
 from transformers import pipeline
 import trafilatura
 
-# Initialize the summarization model
-# "facebook/bart-large-cnn" is excellent for news but can be heavy on CPU.
-# If it's too slow, try "sshleifer/distilbart-cnn-12-6" which is faster.
-print("Loading ML Model... (this might take a while usually once)")
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+# --- CONFIGURATION ---
+# Switching to T5-Small for MAXIMUM SPEED.
+# This model is tiny (~60MB) and very fast on CPU.
+MODEL_NAME = "t5-small"
+
+print(f"Loading Ultra-Fast ML Model ({MODEL_NAME})...")
+try:
+    # T5 requires the task to be specified in the pipeline definition for some versions,
+    # but strictly speaking, it's a text2text-generation model. 
+    # The 'summarization' pipeline handles the T5 prefixing automatically in newer versions,
+    # but we will add it manually to be safe.
+    summarizer = pipeline("summarization", model=MODEL_NAME)
+except Exception as e:
+    print(f"Error loading model: {e}")
+    raise e
 
 def extract_content(url: str) -> str | None:
     """
@@ -28,16 +38,12 @@ def summarize_article(text: str) -> str:
     if not text:
         return "No content to summarize."
     
-    # News articles can be long. We truncate to 1024 chars for speed/memory 
-    # if you want higher accuracy on long texts, you can increase this limit,
-    # but the model has a hard limit around 1024 tokens.
-    input_text = text[:3000] 
+    # T5 is trained with a specific prefix "summarize: "
+    input_text = "summarize: " + text[:2000] 
 
     try:
         # Generate summary
-        # max_length: The max summary size
-        # min_length: The minimum summary size
-        summary = summarizer(input_text, max_length=130, min_length=30, do_sample=False)
+        summary = summarizer(input_text, max_length=100, min_length=20, do_sample=False)
         return summary[0]['summary_text']
     except Exception as e:
         print(f"Error summarizing: {e}")

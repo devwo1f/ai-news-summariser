@@ -19,20 +19,28 @@ def read_root():
     return {"message": "Welcome to the AI News Summarizer API."}
 
 @app.get("/news/search", response_model=NewsResponse)
-def search_news(q: str, language: str = "en"):
+def search_news(q: str = "", language: str = "en", page: int = 1):
     """
     Step 1: Get Headlines ONLY (Fast).
-    We do NOT summarize here anymore.
+    If 'q' is empty, returns Top Headlines.
     """
-    print(f"🔎 Fetching headlines for: {q}")
-    articles = get_news(query=q, language=language, page_size=10) # Increased to 10 since it's fast now
+    # 20 Articles per page ensures the feed is long enough to scroll
+    ARTICLES_PER_PAGE = 20 
+    
+    print(f"🔎 Fetching news (Query: '{q}', Page: {page}, Limit: {ARTICLES_PER_PAGE})")
+    
+    articles = get_news(
+        query=q, 
+        language=language, 
+        page_size=ARTICLES_PER_PAGE, 
+        page=page
+    )
     return NewsResponse(total_results=len(articles), articles=articles)
 
 @app.post("/news/summarize")
 def summarize_news_article(request: SummarizeRequest):
     """
     Step 2: Summarize a single article (Slow/AI).
-    The frontend calls this individually for each card.
     """
     print(f"   🤖 Summarizing: {request.url}")
     
