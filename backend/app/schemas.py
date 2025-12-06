@@ -9,13 +9,13 @@ class Article(BaseModel):
     image_url: Optional[str] = None
     full_text: Optional[str] = None
     summary: Optional[str] = None
-    # We add a loading state flag for the frontend 
-    is_loading: Optional[bool] = False 
+    is_loading: Optional[bool] = False
+    # --- NEW FIELD ---
+    published_at: Optional[str] = None
 
 class NewsResponse(BaseModel):
     total_results: int
     articles: list[Article]
 
-# --- THE MISSING CLASS ---
 class SummarizeRequest(BaseModel):
     url: str

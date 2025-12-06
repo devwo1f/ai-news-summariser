@@ -2,22 +2,45 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // --- Components ---
 
-const NewsCard = ({ article }) => {
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const NewsCard = ({ article, innerRef }) => {
   return (
-    <div className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100 flex flex-col h-full animate-fade-in-up">
+    <div 
+      ref={innerRef}
+      className="bg-white rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100 flex flex-col h-full animate-fade-in-up"
+    >
       {article.image_url && (
-        <img 
-          src={article.image_url} 
-          alt={article.title} 
-          className="w-full h-48 object-cover"
-          onError={(e) => e.target.style.display = 'none'} 
-        />
+        <div className="relative">
+          <img 
+            src={article.image_url} 
+            alt={article.title} 
+            className="w-full h-48 object-cover"
+            onError={(e) => e.target.style.display = 'none'} 
+          />
+          {/* Date Overlay on Image (Optional style, or keep in body) */}
+          <div className="absolute top-2 right-2 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-md backdrop-blur-sm">
+             {formatDate(article.published_at)}
+          </div>
+        </div>
       )}
       <div className="p-6 flex-1 flex flex-col">
-        <div className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-          <span className="font-semibold text-blue-600">{article.source_name}</span>
-          <span>•</span>
-          <span>{new URL(article.url).hostname}</span>
+        {/* Tags Row */}
+        <div className="flex items-center space-x-2 mb-3">
+          <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wide">
+             {article.source_name}
+          </span>
+          <span className="text-xs text-gray-400">
+             {new URL(article.url).hostname.replace('www.', '')}
+          </span>
         </div>
         
         <h3 className="text-xl font-bold text-gray-800 mb-3 leading-tight">
@@ -77,7 +100,6 @@ function App() {
   const [hasMore, setHasMore] = useState(true);
   
   const processedUrls = useRef(new Set());
-  // Ref for the invisible element at the bottom of the list
   const observerTarget = useRef(null);
 
   const categories = ["Technology", "Sports", "Business", "Health", "Science", "Entertainment"];
@@ -90,7 +112,6 @@ function App() {
 
   // 1. Fetch Articles Logic
   const fetchArticles = async (searchQuery, pageNum, isNewSearch = true) => {
-    // If it's a new search, reset everything
     if (isNewSearch) {
         setLoading(true);
         setArticles([]); 
@@ -116,7 +137,6 @@ function App() {
         if (isNewSearch) {
             setArticles(initializedArticles);
         } else {
-            // Append new articles (filtering out any duplicates that NewsAPI might send)
             setArticles(prev => {
                 const newArts = initializedArticles.filter(
                     newArt => !prev.some(prevArt => prevArt.url === newArt.url)
@@ -125,10 +145,9 @@ function App() {
             });
         }
         
-        // Start summarizing the new batch
         summarizeAll(initializedArticles);
       } else {
-        if (!isNewSearch) setHasMore(false); // No more pages to load
+        if (!isNewSearch) setHasMore(false);
       }
     } catch (err) {
       console.error("Failed to fetch news:", err);
@@ -143,7 +162,6 @@ function App() {
   useEffect(() => {
     const observer = new IntersectionObserver(
       entries => {
-        // If we see the bottom element AND we aren't already loading AND there is more to load...
         if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
           setPage(prevPage => {
             const nextPage = prevPage + 1;
@@ -152,7 +170,7 @@ function App() {
           });
         }
       },
-      { threshold: 1.0 } // Trigger when 100% of the target is visible
+      { threshold: 1.0 }
     );
 
     if (observerTarget.current) {
@@ -163,7 +181,6 @@ function App() {
       if (observerTarget.current) observer.disconnect();
     };
   }, [hasMore, loading, loadingMore, query]);
-
 
   const summarizeAll = async (articlesList) => {
     for (const article of articlesList) {
@@ -182,15 +199,21 @@ function App() {
       });
       const data = await response.json();
 
-      setArticles(prevArticles => 
-        prevArticles.map(art => 
+      setArticles(prevArticles => {
+        // If the backend returns no full_text (meaning extraction failed),
+        // we REMOVE this article from the list entirely.
+        if (!data.full_text) {
+             return prevArticles.filter(art => art.url !== url);
+        }
+
+        return prevArticles.map(art => 
           art.url === url 
             ? { ...art, summary: data.summary, is_loading: false } 
             : art
         )
-      );
+      });
     } catch (err) {
-      // If error, stop the loading spinner for this card
+      // If error, we keep the article but show error state (or you could remove it here too)
       setArticles(prevArticles => 
         prevArticles.map(art => 
           art.url === url 
@@ -280,8 +303,6 @@ function App() {
             ))}
         </div>
 
-        {/* --- Infinite Scroll Sensor --- */}
-        {/* We place this div at the bottom. When it comes into view, we load more. */}
         <div ref={observerTarget} className="h-10 w-full mt-8 flex items-center justify-center">
             {loadingMore && (
                <div className="inline-flex items-center px-4 py-2 bg-gray-100 rounded-full text-gray-500 text-sm">

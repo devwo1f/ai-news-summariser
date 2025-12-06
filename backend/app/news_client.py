@@ -16,11 +16,10 @@ else:
 
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-# We now toggle between two endpoints
 ENDPOINT_EVERYTHING = "https://newsapi.org/v2/everything"
 ENDPOINT_HEADLINES = "https://newsapi.org/v2/top-headlines"
 
-def get_news(query: str = "", language: str = "en", page_size: int = 10, page: int = 1) -> list[Article]:
+def get_news(query: str = "", language: str = "en", page_size: int = 20, page: int = 1) -> list[Article]:
     """
     Fetches news. If query is empty, fetches Top Headlines.
     """
@@ -28,7 +27,6 @@ def get_news(query: str = "", language: str = "en", page_size: int = 10, page: i
         raise ValueError("NEWS_API_KEY is not set. Check your .env file.")
 
     if query:
-        # User is searching for something specific
         url = ENDPOINT_EVERYTHING
         params = {
             "q": query,
@@ -39,10 +37,9 @@ def get_news(query: str = "", language: str = "en", page_size: int = 10, page: i
             "page": page
         }
     else:
-        # User wants the "Front Page" (Top Headlines)
         url = ENDPOINT_HEADLINES
         params = {
-            "country": "us", # Default to US for general feed
+            "country": "us",
             "apiKey": NEWS_API_KEY,
             "pageSize": page_size,
             "page": page
@@ -67,7 +64,9 @@ def get_news(query: str = "", language: str = "en", page_size: int = 10, page: i
                 description=item.get("description"),
                 url=item.get("url"),
                 source_name=source_data.get("name", "Unknown Source"),
-                image_url=item.get("urlToImage")
+                image_url=item.get("urlToImage"),
+                # --- EXTRACT DATE ---
+                published_at=item.get("publishedAt") 
             )
             articles.append(article)
             
