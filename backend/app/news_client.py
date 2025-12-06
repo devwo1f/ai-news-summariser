@@ -1,31 +1,55 @@
 import requests
+import os
+from pathlib import Path
+from dotenv import load_dotenv
 from app.schemas import Article, NewsResponse
 
-# --- DEBUG PRINT ---
-# If you don't see this line in your terminal, 
-# you are running an old version of the file!
-print("DEBUG: Loaded the HARDCODED version of news_client.py")
-# -------------------
+# --- ROBUST ENV LOADING ---
+current_file_path = Path(__file__).resolve()
+env_path = current_file_path.parent.parent / '.env'
 
-# --- HARDCODED CONFIGURATION ---
-NEWS_API_KEY = "c2117d778ff6448886214ed9c4c614f3"
-BASE_URL = "https://newsapi.org/v2/everything"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
+# ----------------
 
-def get_news(query: str, language: str = "en", page_size: int = 5) -> list[Article]:
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+
+# We now toggle between two endpoints
+ENDPOINT_EVERYTHING = "https://newsapi.org/v2/everything"
+ENDPOINT_HEADLINES = "https://newsapi.org/v2/top-headlines"
+
+def get_news(query: str = "", language: str = "en", page_size: int = 10, page: int = 1) -> list[Article]:
     """
-    Fetches news articles from NewsAPI based on a query.
-    Returns a list of Article objects (defined in schemas.py).
+    Fetches news. If query is empty, fetches Top Headlines.
     """
-    params = {
-        "q": query,
-        "apiKey": NEWS_API_KEY,
-        "language": language,
-        "pageSize": page_size,
-        "sortBy": "relevancy"
-    }
+    if not NEWS_API_KEY:
+        raise ValueError("NEWS_API_KEY is not set. Check your .env file.")
+
+    if query:
+        # User is searching for something specific
+        url = ENDPOINT_EVERYTHING
+        params = {
+            "q": query,
+            "apiKey": NEWS_API_KEY,
+            "language": language,
+            "pageSize": page_size,
+            "sortBy": "relevancy",
+            "page": page
+        }
+    else:
+        # User wants the "Front Page" (Top Headlines)
+        url = ENDPOINT_HEADLINES
+        params = {
+            "country": "us", # Default to US for general feed
+            "apiKey": NEWS_API_KEY,
+            "pageSize": page_size,
+            "page": page
+        }
 
     try:
-        response = requests.get(BASE_URL, params=params)
+        response = requests.get(url, params=params)
         response.raise_for_status() 
         
         data = response.json()

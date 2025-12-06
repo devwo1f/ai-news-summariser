@@ -9,13 +9,13 @@ class Article(BaseModel):
     image_url: Optional[str] = None
     full_text: Optional[str] = None
     summary: Optional[str] = None
-    # We add a loading state flag for the frontend (optional in backend, but good practice)
+    # We add a loading state flag for the frontend 
     is_loading: Optional[bool] = False 
 
 class NewsResponse(BaseModel):
     total_results: int
     articles: list[Article]
 
-# New Request Model for Phase 4.5
+# --- THE MISSING CLASS ---
 class SummarizeRequest(BaseModel):
     url: str
